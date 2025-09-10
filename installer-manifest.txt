@@ -10,11 +10,6 @@ app-manager.css
 app-manager.js
 app.json
 package-lock.json
-README.md
-DOCUMENTATION.md
-installation.md
-.gitattributes
-.gitignore
 icon/favicon_chatgpt_com.ico
 icon/favicon_claude_ai.ico
 icon/favicon_valloue_fr.png
