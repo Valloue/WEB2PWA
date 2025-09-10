@@ -1,3 +1,0 @@
-installer nodejs
-installer npm
-installer electron
