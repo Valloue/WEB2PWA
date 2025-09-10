@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes Applications</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">
+                <span class="title-icon">🚀</span>
+                Mes Applications
+            </h1>
+            <p class="subtitle">Accès rapide à vos applications préférées</p>
+        </header>
+        
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="Rechercher une application...">
+            <div class="search-icon"><img src="./icons/search.png" alt="Rechercher" style="width: 20px; height: 20px;"></div>
+        </div>
+        
+        <div class="filter-tabs" id="filterTabs">
+            <!-- Les catégories seront générées dynamiquement ici -->
+        </div>
+        
+        <main class="apps-grid" id="appsGrid">
+            <!-- Les applications seront générées dynamiquement ici -->
+        </main>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Chargement des applications...</p>
+        </div>
+    </div>
+    <div id="welcomePopup" class="welcome-popup" style="display: none;">
+      <div class="welcome-content">
+        <h2>Bienvenu sur WEB2PWA</h2>
+        <p>Vous n'avez encore pas configuré de site, faites le vite !!!</p>
+        <div class="welcome-buttons">
+          <button id="firstStepBtn" class="btn btn-primary" onclick="console.log('CLIC DIRECT DÉTECTÉ !')">Premier pas</button>
+          <button id="importBtn" class="btn btn-secondary">Importer</button>
+        </div>
+      </div>
+    </div>
+</body>
+</html>

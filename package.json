@@ -1,0 +1,49 @@
+{
+  "name": "mes-applications",
+  "version": "1.0.0",
+  "description": "Lanceur d'applications moderne avec interface glassmorphism",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "electron",
+    "pwa",
+    "applications",
+    "lanceur",
+    "français"
+  ],
+  "author": "Votre Nom",
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.mesapplications.app",
+    "productName": "Mes Applications",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.cache"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "language": "1036"
+    }
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "jszip": "^3.10.1"
+  }
+}

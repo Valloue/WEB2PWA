@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionnaire d'Applications</title>
+    <link rel="stylesheet" href="app-manager.css">
+</head>
+<body>
+    <div class="manager-container">
+        <header class="manager-header">
+            <h1 class="manager-title">
+                <span class="title-icon">⚙️</span>
+                Gestionnaire d'Applications
+            </h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" id="addAppBtn">
+                    <span class="btn-icon"><img src="./icons/add.png" alt="Ajouter" style="width: 20px; height: 20px;"></span>
+                    Ajouter une application
+                </button>
+                <button class="btn btn-success" id="saveBtn">
+                    <span class="btn-icon"><img src="./icons/save.png" alt="Sauvegarder" style="width: 20px; height: 20px;"></span>
+                    Sauvegarder
+                </button>
+            </div>
+        </header>
+
+        <div class="manager-content">
+            <div class="sidebar">
+                <div class="search-section">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Rechercher une application...">
+                </div>
+                
+                <div class="filter-section">
+                    <h3>Filtrer par catégorie</h3>
+                    <div class="category-filters" id="categoryFilters">
+                        <!-- Les filtres seront générés dynamiquement -->
+                    </div>
+                </div>
+
+                <div class="stats-section">
+                    <h3>Statistiques</h3>
+                    <div class="stat-item">
+                        <span class="stat-label">Total :</span>
+                        <span class="stat-value" id="totalApps">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Catégories :</span>
+                        <span class="stat-value" id="totalCategories">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <main class="apps-list-container">
+                <div class="apps-list" id="appsList">
+                    <!-- Les applications seront affichées ici -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal pour éditer/ajouter une application -->
+    <div class="modal" id="appModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Ajouter une application</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            
+            <form class="modal-body" id="appForm">
+                <div class="form-group">
+                    <label for="appName">Nom de l'application</label>
+                    <input type="text" id="appName" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="appDescription">Description</label>
+                    <input type="text" id="appDescription" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="appUrl">URL</label>
+                    <input type="url" id="appUrl" class="form-input" required>
+                    <button type="button" class="btn btn-small" id="testUrlBtn">Tester l'URL</button>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="appIcon">Icône</label>
+                        <div class="icon-type-selector">
+                            <label class="radio-option">
+                                <input type="radio" name="iconType" value="emoji" checked>
+                                <span>Emoji</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="iconType" value="file">
+                                <span>Fichier image</span>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="iconType" value="favicon">
+                                <span>Favicon du site</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Section Emoji -->
+                        <div id="emojiSection" class="icon-section">
+                            <input type="text" id="appIcon" class="form-input" maxlength="2" placeholder="🚀">
+                            <div class="icon-suggestions" id="iconSuggestions">
+                                <span class="icon-option" data-icon="🚀">🚀</span>
+                                <span class="icon-option" data-icon="🌐">🌐</span>
+                                <span class="icon-option" data-icon="📱">📱</span>
+                                <span class="icon-option" data-icon="💻">💻</span>
+                                <span class="icon-option" data-icon="🎮">🎮</span>
+                                <span class="icon-option" data-icon="🎵">🎵</span>
+                                <span class="icon-option" data-icon="📺">📺</span>
+                                <span class="icon-option" data-icon="🎨">🎨</span>
+                                <span class="icon-option" data-icon="💬">💬</span>
+                                <span class="icon-option" data-icon="🤖">🤖</span>
+                                <span class="icon-option" data-icon="🏠">🏠</span>
+                                <span class="icon-option" data-icon="⚡">⚡</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Section Fichier -->
+                        <div id="fileSection" class="icon-section" style="display:none;">
+                            <div class="file-upload-area">
+                                <input type="file" id="iconFileInput" accept="image/*" style="display:none;">
+                                <button type="button" class="btn btn-secondary" id="uploadIconBtn">
+                                    📁 Choisir un fichier
+                                </button>
+                                <span class="file-name" id="selectedFileName">Aucun fichier sélectionné</span>
+                            </div>
+                            
+                            <div class="available-icons" id="availableIcons">
+                                <h4>Icônes disponibles :</h4>
+                                <div class="icon-grid" id="iconGrid">
+                                    <!-- Les icônes seront chargées dynamiquement -->
+                                </div>
+                            </div>
+                            
+                            <div class="icon-preview" id="iconPreview" style="display:none;">
+                                <h4>Aperçu :</h4>
+                                <img id="previewImage" src="" alt="Aperçu de l'icône">
+                            </div>
+                        </div>
+                        
+                        <!-- Section Favicon -->
+                        <div id="faviconSection" class="icon-section" style="display:none;">
+                            <div class="favicon-fetch-area">
+                                <button type="button" class="btn btn-primary" id="fetchFaviconBtn">
+                                    🌐 Récupérer le favicon automatiquement
+                                </button>
+                                <p class="help-text">Cette option récupère automatiquement l'icône du site web depuis l'URL saisie ci-dessus.</p>
+                            </div>
+                            
+                            <div class="favicon-preview" id="faviconPreview" style="display:none;">
+                                <h4>Favicon récupéré :</h4>
+                                <img id="faviconPreviewImage" src="" alt="Favicon récupéré">
+                                <p class="favicon-filename" id="faviconFileName"></p>
+                            </div>
+                            
+                        </div>
+                        
+                        <input type="hidden" id="selectedIconFile" value="">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="appCategory">Catégorie</label>
+                        <select id="appCategory" class="form-select">
+                            <!-- Les options seront générées dynamiquement -->
+                        </select>
+                        <input type="text" id="newCategory" class="form-input" placeholder="Ou créer une nouvelle catégorie..." style="display:none;">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Annuler</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">Sauvegarder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de confirmation de suppression -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Confirmer la suppression</h2>
+                <button class="modal-close" id="deleteModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Êtes-vous sûr de vouloir supprimer l'application <strong id="deleteAppName"></strong> ?</p>
+                <p class="warning-text">Cette action est irréversible.</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelDeleteBtn">Annuler</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Supprimer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app-manager.js"></script>
+</body>
+</html>
