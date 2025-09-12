@@ -460,36 +460,14 @@ function createFrenchMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   // Démarrer le serveur HTTP Express
   startHttpServer();
   
   createWindow();
 
-  // Vérifier les mises à jour automatiques au démarrage
-  if (updateManager.isAutoUpdateEnabled()) {
-    console.log('🔄 Vérification automatique des mises à jour...');
-    try {
-      const updateResult = await updateManager.autoUpdate();
-      if (updateResult.restartRequired) {
-        console.log('🔄 Redémarrage requis après mise à jour');
-        // Afficher une notification à l'utilisateur
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('update-available', {
-            message: 'Mise à jour installée. L\'application va redémarrer.',
-            restartRequired: true
-          });
-        }
-        // Redémarrer après un délai
-        setTimeout(() => {
-          app.relaunch();
-          app.exit();
-        }, 3000);
-      }
-    } catch (error) {
-      console.error('Erreur lors de la vérification automatique:', error);
-    }
-  }
+  // Démarrer la vérification automatique des mises à jour
+  updateManager.startAutoCheck();
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -807,78 +785,6 @@ ipcMain.handle('get-available-categories', async () => {
   } catch (error) {
     console.error('Erreur lors de la récupération des catégories:', error);
     return [];
-  }
-});
-
-// ============ IPC pour la gestion des mises à jour ============
-
-// IPC pour vérifier les mises à jour
-ipcMain.handle('check-for-updates', async () => {
-  try {
-    console.log('🔍 Vérification manuelle des mises à jour...');
-    const updateInfo = await updateManager.checkForUpdates();
-    return updateInfo;
-  } catch (error) {
-    console.error('Erreur lors de la vérification des mises à jour:', error);
-    return { hasUpdate: false, error: error.message };
-  }
-});
-
-// IPC pour installer les mises à jour
-ipcMain.handle('install-update', async () => {
-  try {
-    console.log('📥 Installation des mises à jour...');
-    const result = await updateManager.downloadAndInstallUpdate();
-    
-    if (result.success) {
-      // Afficher une notification de succès
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('update-installed', {
-          message: 'Mise à jour installée avec succès. L\'application va redémarrer.',
-          restartRequired: true
-        });
-      }
-      
-      // Redémarrer après un délai
-      setTimeout(() => {
-        app.relaunch();
-        app.exit();
-      }, 3000);
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('Erreur lors de l\'installation de la mise à jour:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-// IPC pour activer/désactiver la mise à jour automatique
-ipcMain.handle('set-auto-update', async (event, enabled) => {
-  try {
-    updateManager.setAutoUpdate(enabled);
-    return { success: true };
-  } catch (error) {
-    console.error('Erreur lors de la configuration de la mise à jour automatique:', error);
-    return { success: false, error: error.message };
-  }
-});
-
-// IPC pour obtenir le statut de la mise à jour automatique
-ipcMain.handle('get-auto-update-status', async () => {
-  try {
-    const isEnabled = updateManager.isAutoUpdateEnabled();
-    const lastCheckInfo = updateManager.getLastCheckInfo();
-    return { 
-      success: true, 
-      autoUpdateEnabled: isEnabled,
-      lastCheck: lastCheckInfo.lastCheck,
-      lastUpdate: lastCheckInfo.lastUpdate,
-      currentVersion: lastCheckInfo.currentVersion
-    };
-  } catch (error) {
-    console.error('Erreur lors de la récupération du statut:', error);
-    return { success: false, error: error.message };
   }
 });
 
@@ -1544,311 +1450,6 @@ function openInWebBrowser() {
   console.log(`Application ouverte dans le navigateur: ${webUrl}`);
 }
 
-// Fonction pour vérifier les mises à jour manuellement
-async function checkForUpdatesManually() {
-  try {
-    console.log('🔍 Vérification manuelle des mises à jour...');
-    
-    // Afficher une notification de vérification
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-check-started');
-    }
-    
-    const updateInfo = await updateManager.checkForUpdates();
-    
-    if (updateInfo.hasUpdate) {
-      // Afficher une boîte de dialogue pour proposer l'installation
-      const result = await dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Mise à jour disponible',
-        message: 'Une nouvelle version est disponible !',
-        detail: `Message du commit: ${updateInfo.message || 'Aucun message'}\n\nVoulez-vous installer la mise à jour maintenant ?`,
-        buttons: ['Installer maintenant', 'Plus tard'],
-        defaultId: 0,
-        cancelId: 1
-      });
-      
-      if (result.response === 0) {
-        // L'utilisateur veut installer la mise à jour
-        await installUpdateManually();
-      }
-    } else if (updateInfo.error) {
-      // Afficher une erreur
-      dialog.showErrorBox('Erreur de vérification', `Erreur lors de la vérification des mises à jour:\n${updateInfo.error}`);
-    } else {
-      // Aucune mise à jour disponible
-      dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Aucune mise à jour',
-        message: 'Votre application est à jour !',
-        buttons: ['OK']
-      });
-    }
-    
-  } catch (error) {
-    console.error('Erreur lors de la vérification manuelle:', error);
-    dialog.showErrorBox('Erreur', `Erreur lors de la vérification des mises à jour:\n${error.message}`);
-  }
-}
-
-// Fonction pour installer les mises à jour manuellement
-async function installUpdateManually() {
-  try {
-    console.log('📥 Installation manuelle des mises à jour...');
-    
-    // Afficher une notification d'installation
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('update-install-started');
-    }
-    
-    const result = await updateManager.downloadAndInstallUpdate();
-    
-    if (result.success) {
-      // Afficher une confirmation de succès
-      const restartResult = await dialog.showMessageBox(mainWindow, {
-        type: 'info',
-        title: 'Mise à jour installée',
-        message: 'La mise à jour a été installée avec succès !',
-        detail: 'L\'application va redémarrer pour appliquer les changements.',
-        buttons: ['Redémarrer maintenant', 'Redémarrer plus tard'],
-        defaultId: 0,
-        cancelId: 1
-      });
-      
-      if (restartResult.response === 0) {
-        // Redémarrer immédiatement
-        app.relaunch();
-        app.exit();
-      }
-    } else {
-      // Afficher une erreur
-      dialog.showErrorBox('Erreur d\'installation', `Erreur lors de l'installation de la mise à jour:\n${result.error}`);
-    }
-    
-  } catch (error) {
-    console.error('Erreur lors de l\'installation manuelle:', error);
-    dialog.showErrorBox('Erreur', `Erreur lors de l'installation de la mise à jour:\n${error.message}`);
-  }
-}
-
-// Fonction pour ouvrir les paramètres de mise à jour
-function openUpdateSettings() {
-  // Créer une fenêtre de paramètres de mise à jour
-  const settingsWindow = new BrowserWindow({
-    width: 600,
-    height: 400,
-    title: 'Paramètres de mise à jour',
-    icon: path.join(__dirname, 'icons/icon.ico'),
-    webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      enableRemoteModule: true,
-      webSecurity: false
-    },
-    show: false,
-    center: true,
-    parent: mainWindow,
-    modal: true
-  });
-
-  // HTML pour les paramètres de mise à jour
-  const settingsHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Paramètres de mise à jour</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          margin: 20px;
-          background: #f5f5f5;
-        }
-        .container {
-          background: white;
-          padding: 20px;
-          border-radius: 8px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-          color: #333;
-          margin-bottom: 20px;
-        }
-        .setting-group {
-          margin-bottom: 20px;
-        }
-        label {
-          display: flex;
-          align-items: center;
-          cursor: pointer;
-          font-size: 14px;
-        }
-        input[type="checkbox"] {
-          margin-right: 10px;
-          transform: scale(1.2);
-        }
-        .info {
-          background: #e3f2fd;
-          padding: 10px;
-          border-radius: 4px;
-          margin-top: 10px;
-          font-size: 12px;
-          color: #1976d2;
-        }
-        .status {
-          background: #f5f5f5;
-          padding: 10px;
-          border-radius: 4px;
-          margin-top: 10px;
-          font-size: 12px;
-          color: #666;
-        }
-        .buttons {
-          margin-top: 20px;
-          text-align: right;
-        }
-        button {
-          background: #1976d2;
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 4px;
-          cursor: pointer;
-          margin-left: 10px;
-        }
-        button:hover {
-          background: #1565c0;
-        }
-        button.secondary {
-          background: #757575;
-        }
-        button.secondary:hover {
-          background: #616161;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h2>⚙️ Paramètres de mise à jour</h2>
-        
-        <div class="setting-group">
-          <label>
-            <input type="checkbox" id="autoUpdateCheckbox">
-            Mise à jour automatique
-          </label>
-          <div class="info">
-            Vérifie et installe automatiquement les mises à jour au démarrage de l'application.
-          </div>
-        </div>
-        
-        <div class="status" id="statusInfo">
-          Chargement des informations...
-        </div>
-        
-        <div class="buttons">
-          <button id="checkUpdatesBtn">Vérifier maintenant</button>
-          <button id="closeBtn" class="secondary">Fermer</button>
-        </div>
-      </div>
-      
-      <script>
-        const { ipcRenderer } = require('electron');
-        
-        let currentStatus = {};
-        
-        // Charger le statut actuel
-        async function loadStatus() {
-          try {
-            const status = await ipcRenderer.invoke('get-auto-update-status');
-            if (status.success) {
-              currentStatus = status;
-              document.getElementById('autoUpdateCheckbox').checked = status.autoUpdateEnabled;
-              updateStatusDisplay();
-            }
-          } catch (error) {
-            console.error('Erreur lors du chargement du statut:', error);
-          }
-        }
-        
-        function updateStatusDisplay() {
-          const statusDiv = document.getElementById('statusInfo');
-          let statusText = '';
-          
-          if (currentStatus.lastCheck) {
-            const lastCheck = new Date(currentStatus.lastCheck).toLocaleString('fr-FR');
-            statusText += \`Dernière vérification: \${lastCheck}\\n\`;
-          }
-          
-          if (currentStatus.lastUpdate) {
-            const lastUpdate = new Date(currentStatus.lastUpdate).toLocaleString('fr-FR');
-            statusText += \`Dernière mise à jour: \${lastUpdate}\\n\`;
-          }
-          
-          if (currentStatus.currentVersion) {
-            statusText += \`Version actuelle: \${currentStatus.currentVersion.substring(0, 7)}\\n\`;
-          }
-          
-          statusText += \`Mise à jour automatique: \${currentStatus.autoUpdateEnabled ? 'Activée' : 'Désactivée'}\`;
-          
-          statusDiv.textContent = statusText;
-        }
-        
-        // Gestionnaire pour la case à cocher
-        document.getElementById('autoUpdateCheckbox').addEventListener('change', async (e) => {
-          try {
-            const result = await ipcRenderer.invoke('set-auto-update', e.target.checked);
-            if (result.success) {
-              currentStatus.autoUpdateEnabled = e.target.checked;
-              updateStatusDisplay();
-            } else {
-              console.error('Erreur lors de la mise à jour des paramètres');
-            }
-          } catch (error) {
-            console.error('Erreur:', error);
-          }
-        });
-        
-        // Gestionnaire pour le bouton de vérification
-        document.getElementById('checkUpdatesBtn').addEventListener('click', async () => {
-          try {
-            const updateInfo = await ipcRenderer.invoke('check-for-updates');
-            if (updateInfo.hasUpdate) {
-              alert(\`Mise à jour disponible!\\n\\nMessage: \${updateInfo.message || 'Aucun message'}\\n\\nVoulez-vous l'installer?\`);
-              // Ici on pourrait ajouter une logique pour installer automatiquement
-            } else if (updateInfo.error) {
-              alert(\`Erreur lors de la vérification: \${updateInfo.error}\`);
-            } else {
-              alert('Aucune mise à jour disponible. Votre application est à jour!');
-            }
-          } catch (error) {
-            console.error('Erreur lors de la vérification:', error);
-            alert(\`Erreur: \${error.message}\`);
-          }
-        });
-        
-        // Gestionnaire pour le bouton fermer
-        document.getElementById('closeBtn').addEventListener('click', () => {
-          window.close();
-        });
-        
-        // Charger le statut au démarrage
-        loadStatus();
-      </script>
-    </body>
-    </html>
-  `;
-
-  settingsWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(settingsHTML));
-
-  settingsWindow.once('ready-to-show', () => {
-    settingsWindow.show();
-  });
-
-  settingsWindow.on('closed', () => {
-    console.log('Fenêtre des paramètres de mise à jour fermée');
-  });
-}
-
 // Variable pour stocker la fenêtre du gestionnaire
 let appManagerWindow = null;
 
@@ -2205,3 +1806,463 @@ ipcMain.handle('requestImport', async () => {
     return { success: false, error: error.message };
   }
 });
+
+// ============ IPC pour la gestion des mises à jour ============
+
+// IPC pour vérifier les mises à jour
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    console.log('🔍 Vérification manuelle des mises à jour...');
+    const updateInfo = await updateManager.checkForUpdates();
+    return updateInfo;
+  } catch (error) {
+    console.error('Erreur lors de la vérification des mises à jour:', error);
+    return { hasUpdate: false, error: error.message };
+  }
+});
+
+// IPC pour télécharger les mises à jour
+ipcMain.handle('download-update', async () => {
+  try {
+    console.log('📥 Téléchargement des mises à jour...');
+    const result = await updateManager.downloadAndInstallUpdate();
+    return result;
+  } catch (error) {
+    console.error('Erreur lors du téléchargement des mises à jour:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC pour installer les mises à jour
+ipcMain.handle('install-update', async () => {
+  try {
+    console.log('⚙️ Installation des mises à jour...');
+    const result = await updateManager.installUpdate();
+    
+    if (result.success) {
+      // Afficher une notification de succès
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-installed', {
+          message: 'Mise à jour installée avec succès. L\'application va redémarrer.',
+          restartRequired: true
+        });
+      }
+      
+      // Redémarrer après un délai
+      setTimeout(() => {
+        app.relaunch();
+        app.exit();
+      }, 3000);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Erreur lors de l\'installation de la mise à jour:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC pour obtenir les informations de la dernière release
+ipcMain.handle('get-latest-release-info', async () => {
+  try {
+    const releaseInfo = await updateManager.getLatestReleaseInfo();
+    return releaseInfo;
+  } catch (error) {
+    console.error('Erreur lors de la récupération des informations de release:', error);
+    return { hasUpdate: false, error: error.message };
+  }
+});
+
+// IPC pour obtenir la configuration de mise à jour
+ipcMain.handle('get-update-config', async () => {
+  try {
+    const configPath = path.join(__dirname, 'update-config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      return config;
+    } else {
+      // Configuration par défaut
+      return {
+        githubRepo: {
+          owner: 'Valloue',
+          repo: 'WEB2PWA'
+        },
+        checkInterval: 86400000,
+        autoCheck: false,
+        prerelease: false
+      };
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement de la configuration:', error);
+    return {
+      githubRepo: {
+        owner: 'Valloue',
+        repo: 'WEB2PWA'
+      },
+      checkInterval: 86400000,
+      autoCheck: false,
+      prerelease: false
+    };
+  }
+});
+
+// IPC pour sauvegarder la configuration de mise à jour
+ipcMain.handle('save-update-config', async (event, config) => {
+  try {
+    const configPath = path.join(__dirname, 'update-config.json');
+    const jsonString = JSON.stringify(config, null, 2);
+    fs.writeFileSync(configPath, jsonString, 'utf8');
+    
+    // Recharger la configuration dans le gestionnaire de mise à jour
+    updateManager.updateConfig = config;
+    
+    console.log('Configuration de mise à jour sauvegardée:', config);
+    return { success: true };
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde de la configuration:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Fonction pour vérifier les mises à jour manuellement
+async function checkForUpdatesManually() {
+  try {
+    console.log('🔍 Vérification manuelle des mises à jour...');
+    
+    // Afficher une notification de vérification
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-check-started');
+    }
+    
+    const updateInfo = await updateManager.checkForUpdates();
+    
+    if (updateInfo.hasUpdate) {
+      // Afficher une boîte de dialogue pour proposer l'installation
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Mise à jour disponible',
+        message: 'Une nouvelle version est disponible !',
+        detail: `Version: ${updateInfo.version}\n\nMessage: ${updateInfo.message || 'Aucun message'}\n\nVoulez-vous télécharger et installer la mise à jour maintenant ?`,
+        buttons: ['Télécharger et installer', 'Voir les détails', 'Plus tard'],
+        defaultId: 0,
+        cancelId: 2
+      });
+      
+      if (result.response === 0) {
+        // L'utilisateur veut installer la mise à jour
+        await installUpdateManually();
+      } else if (result.response === 1) {
+        // Voir les détails
+        updateManager.openReleasesPage();
+      }
+    } else if (updateInfo.error) {
+      // Afficher une erreur
+      dialog.showErrorBox('Erreur de vérification', `Erreur lors de la vérification des mises à jour:\n${updateInfo.error}`);
+    } else {
+      // Aucune mise à jour disponible
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Aucune mise à jour',
+        message: 'Votre application est à jour !',
+        buttons: ['OK']
+      });
+    }
+    
+  } catch (error) {
+    console.error('Erreur lors de la vérification manuelle:', error);
+    dialog.showErrorBox('Erreur', `Erreur lors de la vérification des mises à jour:\n${error.message}`);
+  }
+}
+
+// Fonction pour installer les mises à jour manuellement
+async function installUpdateManually() {
+  try {
+    console.log('📥 Installation manuelle des mises à jour...');
+    
+    // Afficher une notification d'installation
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-install-started');
+    }
+    
+    // Télécharger d'abord
+    const downloadResult = await updateManager.downloadAndInstallUpdate();
+    
+    if (downloadResult.success) {
+      // Proposer l'installation
+      const installResult = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Mise à jour téléchargée',
+        message: 'La mise à jour a été téléchargée avec succès !',
+        detail: 'Voulez-vous installer la mise à jour maintenant ? L\'application va redémarrer.',
+        buttons: ['Installer maintenant', 'Installer plus tard'],
+        defaultId: 0,
+        cancelId: 1
+      });
+      
+      if (installResult.response === 0) {
+        // Installer immédiatement
+        await updateManager.installUpdate();
+      }
+    } else {
+      // Afficher une erreur
+      dialog.showErrorBox('Erreur de téléchargement', `Erreur lors du téléchargement de la mise à jour:\n${downloadResult.error}`);
+    }
+    
+  } catch (error) {
+    console.error('Erreur lors de l\'installation manuelle:', error);
+    dialog.showErrorBox('Erreur', `Erreur lors de l'installation de la mise à jour:\n${error.message}`);
+  }
+}
+
+// Fonction pour ouvrir les paramètres de mise à jour
+function openUpdateSettings() {
+  // Créer une fenêtre de paramètres de mise à jour
+  const settingsWindow = new BrowserWindow({
+    width: 600,
+    height: 500,
+    title: 'Paramètres de mise à jour',
+    icon: path.join(__dirname, 'icons/icon.ico'),
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true,
+      webSecurity: false
+    },
+    show: false,
+    center: true,
+    parent: mainWindow,
+    modal: true
+  });
+
+  // HTML pour les paramètres de mise à jour
+  const settingsHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Paramètres de mise à jour</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 20px;
+          background: #f5f5f5;
+        }
+        .container {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+          color: #333;
+          margin-bottom: 20px;
+        }
+        .info {
+          background: #e3f2fd;
+          padding: 15px;
+          border-radius: 4px;
+          margin-bottom: 20px;
+          font-size: 14px;
+          color: #1976d2;
+          line-height: 1.5;
+        }
+        .status {
+          background: #f5f5f5;
+          padding: 15px;
+          border-radius: 4px;
+          margin-bottom: 20px;
+          font-size: 12px;
+          color: #666;
+          line-height: 1.5;
+        }
+        .buttons {
+          text-align: center;
+          margin-top: 20px;
+        }
+        button {
+          background: #1976d2;
+          color: white;
+          border: none;
+          padding: 12px 24px;
+          border-radius: 4px;
+          cursor: pointer;
+          margin: 0 10px;
+          font-size: 14px;
+        }
+        button:hover {
+          background: #1565c0;
+        }
+        button.secondary {
+          background: #757575;
+        }
+        button.secondary:hover {
+          background: #616161;
+        }
+        .config-section {
+          margin-bottom: 20px;
+        }
+        .config-section h3 {
+          margin-bottom: 10px;
+          color: #333;
+        }
+        .config-item {
+          margin-bottom: 10px;
+        }
+        .config-item label {
+          display: block;
+          margin-bottom: 5px;
+          font-weight: bold;
+        }
+        .config-item input, .config-item select {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h2>🔄 Gestion des mises à jour</h2>
+        
+        <div class="info">
+          <strong>Configuration GitHub</strong><br>
+          Configurez votre dépôt GitHub pour les mises à jour automatiques.
+        </div>
+        
+        <div class="config-section">
+          <h3>Configuration du dépôt</h3>
+          <div class="config-item">
+            <label for="githubOwner">Propriétaire du dépôt:</label>
+            <input type="text" id="githubOwner" placeholder="votre-username">
+          </div>
+          <div class="config-item">
+            <label for="githubRepo">Nom du dépôt:</label>
+            <input type="text" id="githubRepo" placeholder="votre-repo">
+          </div>
+          <div class="config-item">
+            <label for="autoCheck">Vérification automatique:</label>
+            <select id="autoCheck">
+              <option value="false">Désactivée</option>
+              <option value="true">Activée</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="status" id="statusInfo">
+          Chargement des informations...
+        </div>
+        
+        <div class="buttons">
+          <button id="checkUpdatesBtn">Vérifier maintenant</button>
+          <button id="saveConfigBtn">Sauvegarder</button>
+          <button id="closeBtn" class="secondary">Fermer</button>
+        </div>
+      </div>
+      
+      <script>
+        const { ipcRenderer } = require('electron');
+        
+        // Charger la configuration actuelle
+        async function loadConfig() {
+          try {
+            // Charger la configuration depuis le fichier update-config.json
+            const config = await ipcRenderer.invoke('get-update-config');
+            document.getElementById('githubOwner').value = config.githubRepo.owner || 'Valloue';
+            document.getElementById('githubRepo').value = config.githubRepo.repo || 'WEB2PWA';
+            document.getElementById('autoCheck').value = config.autoCheck ? 'true' : 'false';
+            updateStatusDisplay();
+          } catch (error) {
+            console.error('Erreur lors du chargement de la configuration:', error);
+            // Valeurs par défaut en cas d'erreur
+            document.getElementById('githubOwner').value = 'Valloue';
+            document.getElementById('githubRepo').value = 'WEB2PWA';
+            document.getElementById('autoCheck').value = 'false';
+            updateStatusDisplay();
+          }
+        }
+        
+        function updateStatusDisplay() {
+          const statusDiv = document.getElementById('statusInfo');
+          const owner = document.getElementById('githubOwner').value;
+          const repo = document.getElementById('githubRepo').value;
+          
+          let statusText = '';
+          statusText += \`Dépôt configuré: \${owner}/\${repo}\\n\`;
+          statusText += \`Vérification automatique: \${document.getElementById('autoCheck').value === 'true' ? 'Activée' : 'Désactivée'}\\n\`;
+          statusText += 'Mode: Mise à jour manuelle uniquement';
+          
+          statusDiv.textContent = statusText;
+        }
+        
+        // Gestionnaire pour le bouton de vérification
+        document.getElementById('checkUpdatesBtn').addEventListener('click', async () => {
+          try {
+            const updateInfo = await ipcRenderer.invoke('check-for-updates');
+            if (updateInfo.hasUpdate) {
+              alert(\`Mise à jour disponible!\\n\\nVersion: \${updateInfo.version}\\nMessage: \${updateInfo.message || 'Aucun message'}\\n\\nVoulez-vous l'installer?\`);
+            } else if (updateInfo.error) {
+              alert(\`Erreur lors de la vérification: \${updateInfo.error}\`);
+            } else {
+              alert('Aucune mise à jour disponible. Votre application est à jour!');
+            }
+          } catch (error) {
+            console.error('Erreur lors de la vérification:', error);
+            alert(\`Erreur: \${error.message}\`);
+          }
+        });
+        
+        // Gestionnaire pour le bouton de sauvegarde
+        document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+          const config = {
+            githubRepo: {
+              owner: document.getElementById('githubOwner').value,
+              repo: document.getElementById('githubRepo').value
+            },
+            autoCheck: document.getElementById('autoCheck').value === 'true',
+            checkInterval: 86400000,
+            prerelease: false,
+            updateChannel: 'stable'
+          };
+          
+          try {
+            const result = await ipcRenderer.invoke('save-update-config', config);
+            if (result.success) {
+              alert('Configuration sauvegardée avec succès!');
+              updateStatusDisplay();
+            } else {
+              alert('Erreur lors de la sauvegarde: ' + result.error);
+            }
+          } catch (error) {
+            console.error('Erreur lors de la sauvegarde:', error);
+            alert('Erreur lors de la sauvegarde: ' + error.message);
+          }
+        });
+        
+        // Gestionnaire pour le bouton fermer
+        document.getElementById('closeBtn').addEventListener('click', () => {
+          window.close();
+        });
+        
+        // Mettre à jour l'affichage quand les champs changent
+        document.getElementById('githubOwner').addEventListener('input', updateStatusDisplay);
+        document.getElementById('githubRepo').addEventListener('input', updateStatusDisplay);
+        document.getElementById('autoCheck').addEventListener('change', updateStatusDisplay);
+        
+        // Charger la configuration au démarrage
+        loadConfig();
+      </script>
+    </body>
+    </html>
+  `;
+
+  settingsWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(settingsHTML));
+
+  settingsWindow.once('ready-to-show', () => {
+    settingsWindow.show();
+  });
+
+  settingsWindow.on('closed', () => {
+    console.log('Fenêtre des paramètres de mise à jour fermée');
+  });
+}

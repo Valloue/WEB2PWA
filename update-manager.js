@@ -1,369 +1,294 @@
-const https = require('https');
-const http = require('http');
-const fs = require('fs');
+const { app, dialog, shell } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
+const https = require('https');
 const { exec } = require('child_process');
-const { dialog } = require('electron');
-const axios = require('axios');
 
 class UpdateManager {
   constructor() {
-    this.repoUrl = 'https://github.com/Valloue/WEB2PWA.git';
-    this.repoApiUrl = 'https://api.github.com/repos/Valloue/WEB2PWA';
-    this.appPath = __dirname;
-    this.updateConfigPath = path.join(this.appPath, 'update-config.json');
     this.updateConfig = this.loadUpdateConfig();
+    this.isChecking = false;
+    this.isDownloading = false;
+    
+    // Configuration d'autoUpdater
+    autoUpdater.autoDownload = false; // Téléchargement manuel uniquement
+    autoUpdater.autoInstallOnAppQuit = false; // Installation manuelle
+    
+    // Configuration du dépôt GitHub
+    if (this.updateConfig.githubRepo) {
+      autoUpdater.setFeedURL({
+        provider: 'github',
+        owner: this.updateConfig.githubRepo.owner,
+        repo: this.updateConfig.githubRepo.repo,
+        private: false
+      });
+    }
+    
+    this.setupEventListeners();
   }
 
   // Charger la configuration de mise à jour
   loadUpdateConfig() {
+    const configPath = path.join(__dirname, 'update-config.json');
+    
     try {
-      if (fs.existsSync(this.updateConfigPath)) {
-        const data = fs.readFileSync(this.updateConfigPath, 'utf8');
-        return JSON.parse(data);
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        console.log('Configuration de mise à jour chargée:', config);
+        return config;
       }
     } catch (error) {
-      console.error('Erreur lors du chargement de la config de mise à jour:', error);
+      console.error('Erreur lors du chargement de la configuration de mise à jour:', error);
     }
     
+    // Configuration par défaut
     return {
-      autoUpdate: false,
-      lastCheck: null,
-      lastUpdate: null,
-      currentVersion: '1.0.0'
+      githubRepo: {
+        owner: 'votre-username',
+        repo: 'votre-repo'
+      },
+      checkInterval: 24 * 60 * 60 * 1000, // 24 heures
+      autoCheck: false,
+      prerelease: false
     };
   }
 
-  // Sauvegarder la configuration de mise à jour
-  saveUpdateConfig() {
-    try {
-      fs.writeFileSync(this.updateConfigPath, JSON.stringify(this.updateConfig, null, 2));
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la config de mise à jour:', error);
-    }
+  // Configurer les écouteurs d'événements
+  setupEventListeners() {
+    autoUpdater.on('checking-for-update', () => {
+      console.log('🔍 Vérification des mises à jour...');
+      this.isChecking = true;
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      console.log('📦 Mise à jour disponible:', info);
+      this.isChecking = false;
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      console.log('✅ Aucune mise à jour disponible');
+      this.isChecking = false;
+    });
+
+    autoUpdater.on('error', (err) => {
+      console.error('❌ Erreur lors de la vérification des mises à jour:', err);
+      this.isChecking = false;
+      this.isDownloading = false;
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      const percent = Math.round(progressObj.percent);
+      console.log(`📥 Téléchargement: ${percent}%`);
+      this.isDownloading = true;
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('✅ Mise à jour téléchargée:', info);
+      this.isDownloading = false;
+    });
   }
 
   // Vérifier les mises à jour disponibles
   async checkForUpdates() {
+    if (this.isChecking) {
+      return { hasUpdate: false, error: 'Vérification déjà en cours' };
+    }
+
     try {
       console.log('🔍 Vérification des mises à jour...');
       
-      // Récupérer les informations du dépôt
-      const repoInfo = await this.fetchRepoInfo();
-      if (!repoInfo) {
-        throw new Error('Impossible de récupérer les informations du dépôt');
+      // Vérifier la configuration
+      if (!this.updateConfig.githubRepo || !this.updateConfig.githubRepo.owner || !this.updateConfig.githubRepo.repo) {
+        throw new Error('Configuration GitHub manquante dans update-config.json');
       }
 
-      const latestCommit = repoInfo.commit;
-      const currentCommit = await this.getCurrentCommit();
+      // Méthode 1: Utiliser l'API GitHub directement (plus fiable)
+      const githubInfo = await this.checkGitHubReleases();
       
-      console.log(`📊 Commit actuel: ${currentCommit?.substring(0, 7) || 'Inconnu'}`);
-      console.log(`📊 Dernier commit: ${latestCommit?.sha?.substring(0, 7) || 'Inconnu'}`);
+      if (githubInfo.hasUpdate) {
+        return {
+          hasUpdate: true,
+          version: githubInfo.version,
+          message: githubInfo.message,
+          downloadUrl: githubInfo.downloadUrl,
+          releaseNotes: githubInfo.releaseNotes,
+          publishedAt: githubInfo.publishedAt
+        };
+      }
 
-      const hasUpdate = currentCommit !== latestCommit?.sha;
+      // Méthode 2: Utiliser autoUpdater comme fallback
+      await autoUpdater.checkForUpdates();
       
-      // Mettre à jour la config
-      this.updateConfig.lastCheck = new Date().toISOString();
-      this.saveUpdateConfig();
-
-      return {
-        hasUpdate,
-        currentCommit,
-        latestCommit: latestCommit?.sha,
-        updateDate: latestCommit?.commit?.committer?.date,
-        message: latestCommit?.commit?.message
-      };
+      return { hasUpdate: false, message: 'Aucune mise à jour disponible' };
 
     } catch (error) {
-      console.error('❌ Erreur lors de la vérification des mises à jour:', error);
-      return {
-        hasUpdate: false,
-        error: error.message
-      };
+      console.error('Erreur lors de la vérification des mises à jour:', error);
+      return { hasUpdate: false, error: error.message };
     }
   }
 
-  // Récupérer les informations du dépôt via l'API GitHub
-  async fetchRepoInfo() {
-    try {
-      const response = await axios.get(this.repoApiUrl + '/commits/main', {
-        headers: {
-          'User-Agent': 'WEB2PWA-UpdateManager/1.0.0',
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        timeout: 10000
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Erreur lors de la récupération des informations du dépôt:', error);
-      throw error;
-    }
-  }
-
-  // Obtenir le commit actuel (via Git ou fichier de version)
-  async getCurrentCommit() {
+  // Vérifier les releases GitHub via API
+  async checkGitHubReleases() {
     return new Promise((resolve) => {
-      // Essayer d'obtenir le commit via Git
-      exec('git rev-parse HEAD', { cwd: this.appPath }, (error, stdout) => {
-        if (error) {
-          // Si Git n'est pas disponible, essayer de lire un fichier de version
-          const versionFile = path.join(this.appPath, '.git-version');
-          if (fs.existsSync(versionFile)) {
-            try {
-              const version = fs.readFileSync(versionFile, 'utf8').trim();
-              resolve(version);
-            } catch (err) {
-              resolve(null);
-            }
-          } else {
-            resolve(null);
-          }
-        } else {
-          resolve(stdout.trim());
+      const { owner, repo } = this.updateConfig.githubRepo;
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/releases`;
+      
+      const options = {
+        headers: {
+          'User-Agent': 'WEB2PWA-Updater',
+          'Accept': 'application/vnd.github.v3+json'
         }
+      };
+
+      https.get(apiUrl, options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const releases = JSON.parse(data);
+            
+            if (releases.length === 0) {
+              resolve({ hasUpdate: false });
+              return;
+            }
+
+            // Filtrer les prereleases si nécessaire
+            const filteredReleases = this.updateConfig.prerelease 
+              ? releases 
+              : releases.filter(release => !release.prerelease);
+
+            if (filteredReleases.length === 0) {
+              resolve({ hasUpdate: false });
+              return;
+            }
+
+            const latestRelease = filteredReleases[0];
+            const currentVersion = this.getCurrentVersion();
+            const latestVersion = latestRelease.tag_name.replace(/^v/, '');
+
+            console.log(`Version actuelle: ${currentVersion}`);
+            console.log(`Dernière version: ${latestVersion}`);
+
+            if (this.isNewerVersion(latestVersion, currentVersion)) {
+              // Trouver l'asset pour Windows
+              const windowsAsset = latestRelease.assets.find(asset => 
+                asset.name.includes('win') && 
+                (asset.name.endsWith('.exe') || asset.name.endsWith('.msi'))
+              );
+
+              resolve({
+                hasUpdate: true,
+                version: latestVersion,
+                message: latestRelease.body || 'Mise à jour disponible',
+                downloadUrl: windowsAsset ? windowsAsset.browser_download_url : latestRelease.html_url,
+                releaseNotes: latestRelease.body,
+                publishedAt: latestRelease.published_at
+              });
+            } else {
+              resolve({ hasUpdate: false });
+            }
+
+          } catch (error) {
+            console.error('Erreur lors du parsing des releases GitHub:', error);
+            resolve({ hasUpdate: false, error: error.message });
+          }
+        });
+      }).on('error', (error) => {
+        console.error('Erreur lors de la requête GitHub:', error);
+        resolve({ hasUpdate: false, error: error.message });
       });
     });
   }
 
-  // Télécharger et installer les mises à jour
+  // Obtenir la version actuelle de l'application
+  getCurrentVersion() {
+    return app.getVersion();
+  }
+
+  // Comparer les versions
+  isNewerVersion(version1, version2) {
+    const v1parts = version1.split('.').map(Number);
+    const v2parts = version2.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(v1parts.length, v2parts.length); i++) {
+      const v1part = v1parts[i] || 0;
+      const v2part = v2parts[i] || 0;
+      
+      if (v1part > v2part) return true;
+      if (v1part < v2part) return false;
+    }
+    
+    return false;
+  }
+
+  // Télécharger et installer la mise à jour
   async downloadAndInstallUpdate() {
+    if (this.isDownloading) {
+      return { success: false, error: 'Téléchargement déjà en cours' };
+    }
+
     try {
-      console.log('📥 Téléchargement des mises à jour...');
+      console.log('📥 Téléchargement de la mise à jour...');
       
-      // Créer un dossier temporaire pour le téléchargement
-      const tempDir = path.join(this.appPath, 'temp-update');
-      if (fs.existsSync(tempDir)) {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      }
-      fs.mkdirSync(tempDir, { recursive: true });
-
-      // Télécharger les fichiers individuels depuis GitHub
-      await this.downloadFilesFromGitHub(tempDir);
+      // Utiliser autoUpdater pour télécharger
+      await autoUpdater.downloadUpdate();
       
-      // Copier les fichiers mis à jour (en excluant certains dossiers)
-      await this.copyUpdatedFiles(tempDir);
-      
-      // Nettoyer le dossier temporaire
-      fs.rmSync(tempDir, { recursive: true, force: true });
-      
-      // Mettre à jour la config
-      this.updateConfig.lastUpdate = new Date().toISOString();
-      this.updateConfig.currentVersion = await this.getCurrentCommit();
-      this.saveUpdateConfig();
-
-      console.log('✅ Mise à jour installée avec succès');
-      return { success: true };
+      return { success: true, message: 'Mise à jour téléchargée avec succès' };
 
     } catch (error) {
-      console.error('❌ Erreur lors de l\'installation de la mise à jour:', error);
+      console.error('Erreur lors du téléchargement de la mise à jour:', error);
       return { success: false, error: error.message };
     }
   }
 
-  // Télécharger les fichiers depuis GitHub
-  async downloadFilesFromGitHub(destination) {
-    const filesToDownload = [
-      'main.js',
-      'script.js', 
-      'style.css',
-      'index.html',
-      'app-manager.html',
-      'app-manager.js',
-      'app-manager.css',
-      'preload.js',
-      'package.json'
-    ];
-
-    for (const file of filesToDownload) {
-      try {
-        const fileUrl = `https://raw.githubusercontent.com/Valloue/WEB2PWA/main/${file}`;
-        const response = await axios.get(fileUrl, {
-          timeout: 10000,
-          responseType: 'text'
-        });
-        
-        const filePath = path.join(destination, file);
-        fs.writeFileSync(filePath, response.data, 'utf8');
-        console.log(`✅ Fichier téléchargé: ${file}`);
-      } catch (error) {
-        console.error(`❌ Erreur lors du téléchargement de ${file}:`, error.message);
-      }
-    }
-
-    // Télécharger le dossier icons
-    await this.downloadIconsFolder(destination);
-  }
-
-  // Télécharger le dossier des icônes
-  async downloadIconsFolder(destination) {
+  // Installer la mise à jour téléchargée
+  async installUpdate() {
     try {
-      const iconsDir = path.join(destination, 'icons');
-      fs.mkdirSync(iconsDir, { recursive: true });
-
-      // Liste des icônes connues (vous pouvez l'étendre)
-      const iconFiles = [
-        'icon.ico',
-        'add.png',
-        'delete.png', 
-        'edit.png',
-        'filter.png',
-        'save.png',
-        'search.png'
-      ];
-
-      for (const iconFile of iconFiles) {
-        try {
-          const iconUrl = `https://raw.githubusercontent.com/Valloue/WEB2PWA/main/icons/${iconFile}`;
-          const response = await axios.get(iconUrl, {
-            timeout: 10000,
-            responseType: 'arraybuffer'
-          });
-          
-          const iconPath = path.join(iconsDir, iconFile);
-          fs.writeFileSync(iconPath, response.data);
-          console.log(`✅ Icône téléchargée: ${iconFile}`);
-        } catch (error) {
-          console.log(`⚠️ Icône non trouvée: ${iconFile}`);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors du téléchargement du dossier icons:', error.message);
-    }
-  }
-
-  // Copier les fichiers mis à jour
-  async copyUpdatedFiles(sourceDir) {
-    const filesToUpdate = [
-      'main.js',
-      'script.js',
-      'style.css',
-      'index.html',
-      'app-manager.html',
-      'app-manager.js',
-      'app-manager.css',
-      'preload.js',
-      'package.json'
-    ];
-
-    const dirsToUpdate = [
-      'icons'
-    ];
-
-    // Copier les fichiers
-    for (const file of filesToUpdate) {
-      const sourceFile = path.join(sourceDir, file);
-      const destFile = path.join(this.appPath, file);
+      console.log('⚙️ Installation de la mise à jour...');
       
-      if (fs.existsSync(sourceFile)) {
-        try {
-          fs.copyFileSync(sourceFile, destFile);
-          console.log(`✅ Fichier mis à jour: ${file}`);
-        } catch (error) {
-          console.error(`❌ Erreur lors de la copie de ${file}:`, error);
-        }
-      }
-    }
-
-    // Copier les dossiers
-    for (const dir of dirsToUpdate) {
-      const sourceDirPath = path.join(sourceDir, dir);
-      const destDirPath = path.join(this.appPath, dir);
+      // Quitter l'application et installer
+      autoUpdater.quitAndInstall();
       
-      if (fs.existsSync(sourceDirPath)) {
-        try {
-          if (fs.existsSync(destDirPath)) {
-            fs.rmSync(destDirPath, { recursive: true, force: true });
-          }
-          fs.cpSync(sourceDirPath, destDirPath, { recursive: true });
-          console.log(`✅ Dossier mis à jour: ${dir}`);
-        } catch (error) {
-          console.error(`❌ Erreur lors de la copie du dossier ${dir}:`, error);
-        }
-      }
-    }
+      return { success: true, message: 'Mise à jour installée avec succès' };
 
-    // Sauvegarder la version actuelle
-    const versionFile = path.join(this.appPath, '.git-version');
-    try {
-      const latestCommit = await this.getLatestCommitFromRepo();
-      if (latestCommit) {
-        fs.writeFileSync(versionFile, latestCommit);
-      }
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la version:', error);
+      console.error('Erreur lors de l\'installation de la mise à jour:', error);
+      return { success: false, error: error.message };
     }
   }
 
-  // Obtenir le dernier commit du dépôt
-  async getLatestCommitFromRepo() {
+  // Ouvrir la page de releases GitHub
+  openReleasesPage() {
+    const { owner, repo } = this.updateConfig.githubRepo;
+    const releasesUrl = `https://github.com/${owner}/${repo}/releases`;
+    shell.openExternal(releasesUrl);
+  }
+
+  // Obtenir les informations de la dernière release
+  async getLatestReleaseInfo() {
     try {
-      const repoInfo = await this.fetchRepoInfo();
-      return repoInfo?.sha || null;
+      const githubInfo = await this.checkGitHubReleases();
+      return githubInfo;
     } catch (error) {
-      console.error('Erreur lors de la récupération du dernier commit:', error);
-      return null;
+      console.error('Erreur lors de la récupération des informations de release:', error);
+      return { hasUpdate: false, error: error.message };
     }
   }
 
-  // Vérifier et installer automatiquement les mises à jour
-  async autoUpdate() {
-    if (!this.updateConfig.autoUpdate) {
-      return { success: false, message: 'Mise à jour automatique désactivée' };
-    }
-
-    try {
-      const updateInfo = await this.checkForUpdates();
+  // Vérifier les mises à jour automatiquement (si activé)
+  startAutoCheck() {
+    if (this.updateConfig.autoCheck && this.updateConfig.checkInterval > 0) {
+      setInterval(() => {
+        this.checkForUpdates();
+      }, this.updateConfig.checkInterval);
       
-      if (updateInfo.hasUpdate) {
-        console.log('🔄 Mise à jour automatique détectée, installation...');
-        const result = await this.downloadAndInstallUpdate();
-        
-        if (result.success) {
-          return {
-            success: true,
-            message: 'Mise à jour automatique installée avec succès',
-            restartRequired: true
-          };
-        } else {
-          return {
-            success: false,
-            message: `Erreur lors de la mise à jour automatique: ${result.error}`
-          };
-        }
-      } else {
-        return {
-          success: true,
-          message: 'Application à jour'
-        };
-      }
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour automatique:', error);
-      return {
-        success: false,
-        message: `Erreur: ${error.message}`
-      };
+      console.log('🔄 Vérification automatique des mises à jour activée');
     }
-  }
-
-  // Activer/désactiver la mise à jour automatique
-  setAutoUpdate(enabled) {
-    this.updateConfig.autoUpdate = enabled;
-    this.saveUpdateConfig();
-    console.log(`Mise à jour automatique ${enabled ? 'activée' : 'désactivée'}`);
-  }
-
-  // Obtenir le statut de la mise à jour automatique
-  isAutoUpdateEnabled() {
-    return this.updateConfig.autoUpdate;
-  }
-
-  // Obtenir les informations de la dernière vérification
-  getLastCheckInfo() {
-    return {
-      lastCheck: this.updateConfig.lastCheck,
-      lastUpdate: this.updateConfig.lastUpdate,
-      currentVersion: this.updateConfig.currentVersion
-    };
   }
 }
 

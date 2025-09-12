@@ -10,5 +10,7 @@ app-manager.js
 app.json
 package-lock.json
 start.vbs
+update-config.json
+update-manager.js
 icon/
 icons/

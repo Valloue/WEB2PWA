@@ -32,6 +32,11 @@
       "**/*",
       "!node_modules/.cache"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "Valloue",
+      "repo": "WEB2PWA"
+    },
     "win": {
       "target": "nsis",
       "icon": "./icons/icon.ico"
@@ -45,6 +50,6 @@
   "dependencies": {
     "express": "^5.1.0",
     "jszip": "^3.10.1",
-    "axios": "^1.6.0"
+    "electron-updater": "^6.1.7"
   }
 }
