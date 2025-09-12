@@ -29,6 +29,13 @@
       "iconFile": "favicon_claude_ai.ico"
     },
     {
+      "name": "Claude",
+      "description": "IA de Anthropic",
+      "url": "https://claude.ai/",
+      "category": "IA",
+      "iconFile": "favicon_claude_ai.ico"
+    },
+    {
       "name": "Perplexity",
       "description": "IA de Perplexity",
       "url": "https://www.perplexity.ai/",
