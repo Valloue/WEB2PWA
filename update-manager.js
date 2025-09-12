@@ -173,6 +173,9 @@ class UpdateManager {
 
             console.log(`Version actuelle: ${currentVersion}`);
             console.log(`Dernière version: ${latestVersion}`);
+            console.log(`Nombre de releases trouvées: ${releases.length}`);
+            console.log(`Releases filtrées: ${filteredReleases.length}`);
+            console.log(`Dernière release:`, latestRelease);
 
             if (this.isNewerVersion(latestVersion, currentVersion)) {
               // Trouver l'asset pour Windows
