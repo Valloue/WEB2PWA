@@ -1,6 +1,13 @@
 {
   "apps": [
     {
+      "name": "Valloue.fr",
+      "description": "Valloue.fr",
+      "url": "https://valloue.fr",
+      "category": "Notre Site Web",
+      "iconFile": "favicon_valloue_fr.png"
+    },
+    {
       "name": "Gemini",
       "description": "IA de Google",
       "url": "https://gemini.google.com/app",
@@ -27,41 +34,6 @@
       "url": "https://www.perplexity.ai/",
       "category": "IA",
       "iconFile": "favicon_www_perplexity_ai.png"
-    },
-    {
-      "name": "Retour",
-      "description": "Retour",
-      "url": "https://valloue.fr/apps/retour/",
-      "category": "Mon Site",
-      "iconFile": "favicon_valloue_fr_3.png"
-    },
-    {
-      "name": "Valloue.fr",
-      "description": "Valloue.fr",
-      "url": "https://valloue.fr",
-      "category": "Mon Site",
-      "iconFile": "favicon_valloue_fr.png"
-    },
-    {
-      "name": "Youtube",
-      "description": "Youtube",
-      "url": "https://www.youtube.com/",
-      "category": "divertissement",
-      "iconFile": "favicon_www_youtube_com.png"
-    },
-    {
-      "name": "box a distance",
-      "description": "box a distance",
-      "url": "https://valloue.fr:456/",
-      "category": "Mon Site",
-      "iconFile": ""
-    },
-    {
-      "name": "Speedtest Ookla",
-      "description": "Speedtest Ookla",
-      "url": "https://www.speedtest.net/fr",
-      "category": "speedtest",
-      "iconFile": "favicon_www_speedtest_net.svg"
     }
   ]
 }
