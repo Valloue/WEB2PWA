@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { dialog } = require('electron');
+const axios = require('axios');
 
 class UpdateManager {
   constructor() {
@@ -84,49 +85,19 @@ class UpdateManager {
 
   // Récupérer les informations du dépôt via l'API GitHub
   async fetchRepoInfo() {
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.github.com',
-        path: '/repos/Valloue/WEB2PWA/commits/main',
-        method: 'GET',
+    try {
+      const response = await axios.get(this.repoApiUrl + '/commits/main', {
         headers: {
           'User-Agent': 'WEB2PWA-UpdateManager/1.0.0',
           'Accept': 'application/vnd.github.v3+json'
-        }
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        
-        res.on('end', () => {
-          try {
-            if (res.statusCode === 200) {
-              const commitInfo = JSON.parse(data);
-              resolve(commitInfo);
-            } else {
-              reject(new Error(`Erreur API GitHub: ${res.statusCode}`));
-            }
-          } catch (error) {
-            reject(error);
-          }
-        });
+        },
+        timeout: 10000
       });
-
-      req.on('error', (error) => {
-        reject(error);
-      });
-
-      req.setTimeout(10000, () => {
-        req.destroy();
-        reject(new Error('Timeout de la requête'));
-      });
-
-      req.end();
-    });
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de la récupération des informations du dépôt:', error);
+      throw error;
+    }
   }
 
   // Obtenir le commit actuel (via Git ou fichier de version)
@@ -166,8 +137,8 @@ class UpdateManager {
       }
       fs.mkdirSync(tempDir, { recursive: true });
 
-      // Cloner le dépôt dans le dossier temporaire
-      await this.cloneRepository(tempDir);
+      // Télécharger les fichiers individuels depuis GitHub
+      await this.downloadFilesFromGitHub(tempDir);
       
       // Copier les fichiers mis à jour (en excluant certains dossiers)
       await this.copyUpdatedFiles(tempDir);
@@ -189,21 +160,75 @@ class UpdateManager {
     }
   }
 
-  // Cloner le dépôt Git
-  async cloneRepository(destination) {
-    return new Promise((resolve, reject) => {
-      const command = `git clone --depth 1 ${this.repoUrl} .`;
-      
-      exec(command, { cwd: destination }, (error, stdout, stderr) => {
-        if (error) {
-          console.error('Erreur Git:', stderr);
-          reject(new Error(`Erreur lors du clonage: ${error.message}`));
-        } else {
-          console.log('✅ Dépôt cloné avec succès');
-          resolve();
+  // Télécharger les fichiers depuis GitHub
+  async downloadFilesFromGitHub(destination) {
+    const filesToDownload = [
+      'main.js',
+      'script.js', 
+      'style.css',
+      'index.html',
+      'app-manager.html',
+      'app-manager.js',
+      'app-manager.css',
+      'preload.js',
+      'package.json'
+    ];
+
+    for (const file of filesToDownload) {
+      try {
+        const fileUrl = `https://raw.githubusercontent.com/Valloue/WEB2PWA/main/${file}`;
+        const response = await axios.get(fileUrl, {
+          timeout: 10000,
+          responseType: 'text'
+        });
+        
+        const filePath = path.join(destination, file);
+        fs.writeFileSync(filePath, response.data, 'utf8');
+        console.log(`✅ Fichier téléchargé: ${file}`);
+      } catch (error) {
+        console.error(`❌ Erreur lors du téléchargement de ${file}:`, error.message);
+      }
+    }
+
+    // Télécharger le dossier icons
+    await this.downloadIconsFolder(destination);
+  }
+
+  // Télécharger le dossier des icônes
+  async downloadIconsFolder(destination) {
+    try {
+      const iconsDir = path.join(destination, 'icons');
+      fs.mkdirSync(iconsDir, { recursive: true });
+
+      // Liste des icônes connues (vous pouvez l'étendre)
+      const iconFiles = [
+        'icon.ico',
+        'add.png',
+        'delete.png', 
+        'edit.png',
+        'filter.png',
+        'save.png',
+        'search.png'
+      ];
+
+      for (const iconFile of iconFiles) {
+        try {
+          const iconUrl = `https://raw.githubusercontent.com/Valloue/WEB2PWA/main/icons/${iconFile}`;
+          const response = await axios.get(iconUrl, {
+            timeout: 10000,
+            responseType: 'arraybuffer'
+          });
+          
+          const iconPath = path.join(iconsDir, iconFile);
+          fs.writeFileSync(iconPath, response.data);
+          console.log(`✅ Icône téléchargée: ${iconFile}`);
+        } catch (error) {
+          console.log(`⚠️ Icône non trouvée: ${iconFile}`);
         }
-      });
-    });
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors du téléchargement du dossier icons:', error.message);
+    }
   }
 
   // Copier les fichiers mis à jour

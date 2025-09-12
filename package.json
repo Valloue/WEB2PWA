@@ -45,7 +45,6 @@
   "dependencies": {
     "express": "^5.1.0",
     "jszip": "^3.10.1",
-    "nodegit": "^0.28.0",
     "axios": "^1.6.0"
   }
 }
