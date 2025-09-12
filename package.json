@@ -15,7 +15,7 @@
     "lanceur",
     "français"
   ],
-  "author": "Votre Nom",
+  "author": "Valentin - valloue.fr",
   "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
@@ -34,7 +34,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "./icons/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -44,6 +44,8 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "nodegit": "^0.28.0",
+    "axios": "^1.6.0"
   }
 }
